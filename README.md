@@ -42,9 +42,9 @@ python criollitas.py <orchestrator_cfg_json_file1> <time_window_hours> <optional
 
 **Example1.** Analyze input.json with a time window of 2000 hours:
 ```bash
-python criollitas.py input.json 2000
+python criollitas.py input.json 20000
 ```
 **Example2.** Analyze input.json with a time window of 3000 hours and compare it with input2.json:
 ```bash
-python criollitas.py input.json 3000 input2.json
+python criollitas.py input.json 30000 input2.json
 ```
