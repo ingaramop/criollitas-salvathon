@@ -40,8 +40,16 @@ def collect_applications_from_json(orchestrator_cfg_json_file):
     elif isinstance(orchestrator_cfg_json_file, list):
         for item in orchestrator_cfg_json_file:
             apps_objects.extend(collect_applications_from_json(item))
-    
     return apps_objects
+
+# Function to check if a date is within X hours of the current time
+def changed_cfg_in_the_last_hours(date_string, hours):
+    current_time = datetime.now()
+    date_time = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%fZ")
+    time_difference = current_time - date_time
+    return time_difference.total_seconds() <= hours*60*60 
+
+
 
 
 USAGE_MSG = """USAGE: python criollitas.py <orchestrator_cfg_json_file1> <time_window_hours> <optional_orchestrator_cfg_json_file2>.
@@ -68,4 +76,22 @@ except Exception as e:
     print(f"Unable to parse file {sys.argv[1]}.")
     print(f"ERROR: {e}")
     exit(-1)
+
+#Collect applications info from json
+applications_file1 = collect_applications_from_json(parsed_json)
+time_window_hours = int(sys.argv[2])
+
+# Filter the list of objects
+filtered_applications = [obj for obj in applications_file1 if changed_cfg_in_the_last_hours(obj["versionInfo"]["lastConfigChangeAt"], time_window_hours)]
+
+# Sort the filtered list by date in descending order (latest date first)
+ordered_applications = sorted(filtered_applications, key=lambda obj: obj["versionInfo"]["lastConfigChangeAt"], reverse=True)
+
+
+print(f"Applications that changed their config in the last {time_window_hours} hours, ordered by change date desc.:")
+print("CONFIG_MODIFICATION_DATE <-> APPLICATION NAME")
+if len(ordered_applications) == 0:
+    print("No apps found matching this criteria.")
+for app in ordered_applications:
+    print(f'{app["versionInfo"]["lastConfigChangeAt"]} <-> {app["id"]}')
 
