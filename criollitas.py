@@ -3,30 +3,43 @@ import os
 import json
 from datetime import datetime
 
-def check_arguments(params):
-  if len(params) == 3:
-      orchestrator_cfg_json_file1 = params[1]
-      time_window_hours = params[2]
-      if not os.path.isfile(orchestrator_cfg_json_file1):
-          raise Exception(f"Argument 1 ({orchestrator_cfg_json_file1}) is not a valid path to an existing file.")
-      elif not (time_window_hours).isnumeric():
-          raise Exception(f"Argument 2 ({time_window_hours}) is not an integer.")
-  elif len(params) == 4:
-      orchestrator_cfg_json_file1 = params[1]
-      time_window_hours = params[2]
-      optional_orchestrator_cfg_json_file2 = params[3]
+def check_arguments(args):
+    """
+    Validate and check command-line arguments for the script.
+    Args:
+        args (list): A list of command-line arguments.
+    Raises: 
+        Exception: If any validation checks fail, generic exceptions with descriptive error messages are raised.
+    """
+    if len(args) == 3:
+        orchestrator_cfg_json_file1 = args[1]
+        time_window_hours = args[2]
+        if not os.path.isfile(orchestrator_cfg_json_file1):
+            raise Exception(f"Argument 1 ({orchestrator_cfg_json_file1}) is not a valid path to an existing file.")
+        elif not (time_window_hours).isnumeric():
+            raise Exception(f"Argument 2 ({time_window_hours}) is not an integer.")
+    elif len(args) == 4:
+        orchestrator_cfg_json_file1 = args[1]
+        time_window_hours = args[2]
+        optional_orchestrator_cfg_json_file2 = args[3]
 
-      if not os.path.isfile(orchestrator_cfg_json_file1):
-          raise Exception(f"Argument 1 ({orchestrator_cfg_json_file1}) is not a valid path to an existing file.")
-      elif not (time_window_hours).isnumeric():
-          raise Exception(f"Argument 2 ({time_window_hours}) is not an integer.")
-      if not os.path.isfile(optional_orchestrator_cfg_json_file2):
-          raise Exception(f"Argument 3 ({optional_orchestrator_cfg_json_file2}) is not a valid path to an existing file.")
-  else:
-      raise Exception("Incorrect amount of params.")
+        if not os.path.isfile(orchestrator_cfg_json_file1):
+            raise Exception(f"Argument 1 ({orchestrator_cfg_json_file1}) is not a valid path to an existing file.")
+        elif not (time_window_hours).isnumeric():
+            raise Exception(f"Argument 2 ({time_window_hours}) is not an integer.")
+        if not os.path.isfile(optional_orchestrator_cfg_json_file2):
+            raise Exception(f"Argument 3 ({optional_orchestrator_cfg_json_file2}) is not a valid path to an existing file.")
+    else:
+        raise Exception("Incorrect amount of params.")
 
-# Function to extract all occurrences of "apps" objects
 def collect_applications_from_json(orchestrator_cfg_json_file):
+    """
+    Recursive function to extract all occurrences of "apps" objects, nested in different levels of hierarchy within the object structure.
+    Args:
+        orchestrator_cfg_json_file (obj) : An object resultant of parsing a Marathon json config file.
+    Returns: 
+        list: A list with all the "apps" objects found in the input.
+    """
     apps_objects = []
     
     if isinstance(orchestrator_cfg_json_file, dict):
@@ -38,20 +51,33 @@ def collect_applications_from_json(orchestrator_cfg_json_file):
     elif isinstance(orchestrator_cfg_json_file, list):
         for item in orchestrator_cfg_json_file:
             apps_objects.extend(collect_applications_from_json(item))
-    
     return apps_objects
 
-
-# Function to check if a date is within X hours of the current time
 def changed_cfg_in_the_last_hours(date_string, hours):
+    """
+    Check if a configuration change occurred within the specified time window.
+    Args:
+        date_string (str): A timestamp in the format "%Y-%m-%dT%H:%M:%S.%fZ" representing the configuration change date.
+        hours (int): The time window threshold in hours.
+    Returns:
+        bool: True if the configuration change occurred within the specified time window, False otherwise.
+    """
+
     current_time = datetime.now()
     date_time = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%fZ")
     time_difference = current_time - date_time
     return time_difference.total_seconds() <= hours*60*60 
 
+
 def find_duplicate_containerPorts(applications_file):
-    # Create a dictionary to map containerPorts to lists of applications using them
-    port_to_applications = {}
+    """
+    Find duplicate containerPorts within a list of applications.
+    Args:
+        applications_file (list): A list of application objects from a Marathon json config file.
+    Returns:
+        dict: A dictionary mapping duplicate containerPorts to a list of applications using them.
+    """
+    port_to_applications = {}# Create a dictionary to map containerPorts to lists of applications using them
 
     for application in applications_file: #iter on all apps
         try:
@@ -73,9 +99,21 @@ def find_duplicate_containerPorts(applications_file):
     return port_to_applications
 
 def compare_application_versions_between_files(applications_file1, applications_file2):
-    version_change_list = []
-    #Function to detect version differences in images with the format Registry/component:version-date-hour
+    """
+    Compare application image versions between two sets of applications from different files. The format of the images is format: Registry/component:version-date-hour.
 
+    Args:
+        applications_file1 (list): A list of applications from the first file.
+        applications_file2 (list): A list of applications from the second file.
+
+    Returns:
+        list: A list of version differences between the applications from the two files. Each entry in the list is a dictionary with the following keys:
+        - "application": Application ID
+        - "image_version_file_1": Image version in the first file
+        - "image_version_file_2": Image version in the second file
+        - "most_recent": The most recent version between the two files
+    """
+    version_change_list = []
     # iter over all apps in file1
     for app_from_file1 in applications_file1:
         # Use the filter function to find the equivalent application in applications_file2
@@ -95,46 +133,64 @@ def compare_application_versions_between_files(applications_file1, applications_
             continue # If "Registry/component" part of the image is not identical, continue
 
         #At this point, I know the fields version-date-hour are not equal.
-        most_recent = "unknown"
-        try:
-            app1_full_version = application_file1_image.split(":")[1] #format: version-date-hour
-            app2_full_version = application_file2_image.split(":")[1] #format: version-date-hour
-            # Split version strings into lists of integers
-            version1_parts = [int(part) for part in app1_full_version.split("-")[0].strip('v').split('.')] 
-            version2_parts = [int(part) for part in app2_full_version.split("-")[0].strip('v').split('.')] 
-            # Pad the shorter version with zeros
-            while len(version1_parts) < len(version2_parts):
-                version1_parts.append(0)
-            while len(version2_parts) < len(version1_parts):
-                version2_parts.append(0)  
-            # Compare each part of the version
-            for part1, part2 in zip(version1_parts, version2_parts):
-                if part1 < part2:
-                    most_recent = "image_version_file_2"
-                elif part1 > part2:
-                    most_recent = "image_version_file_1"
 
-            # If versions are equal, compare the dates
-            date1 = int(app1_full_version.split("-")[1])
-            date2 = int(app2_full_version.split("-")[1])
-            if date1 < date2:
-                most_recent = "image_version_file_2"
-            if date1 > date2:
-                most_recent = "image_version_file_1"
+        app1_full_version = application_file1_image.split(":")[1] #format: version-date-hour
+        app2_full_version = application_file2_image.split(":")[1] #format: version-date-hour
 
-            # If dates are equal, compare the hours
-            hour1 = int(app1_full_version.split("-")[2])
-            hour2 = int(app2_full_version.split("-")[2])
-            if hour1 < hour2:
-                most_recent = "image_version_file_2"
-            if hour1 > hour2:
-                most_recent = "image_version_file_1"
-        except:
-            pass
+        most_recent = find_most_recent_version(app1_full_version, app2_full_version)
+
         # Append version comparison to list
         version_change_list.append(({"application": app_from_file1["id"], "image_version_file_1": app_from_file1["container"]["docker"]["image"],
                                     "image_version_file_2": app_from_file2["container"]["docker"]["image"], "most_recent": most_recent}))
     return version_change_list
+
+def find_most_recent_version(app1_full_version, app2_full_version):
+    """
+    Compare two full version strings and determine the most recent version.
+    Args:
+        app1_full_version (str): Full version string from the first application.
+        app2_full_version (str): Full version string from the second application.
+    Returns:
+        str: The result indicating which version is the most recent:
+        - "image_version_file_1" if the first application's version is more recent.
+        - "image_version_file_2" if the second application's version is more recent.
+        - "unknown" if versions cannot be compared or are equal.
+    """
+    most_recent = "unknown"
+    try:   
+        # Split version strings into lists of integers
+        version1_parts = [int(part) for part in app1_full_version.split("-")[0].strip('v').split('.')] 
+        version2_parts = [int(part) for part in app2_full_version.split("-")[0].strip('v').split('.')] 
+        # Pad the shorter version with zeros
+        while len(version1_parts) < len(version2_parts):
+            version1_parts.append(0)
+        while len(version2_parts) < len(version1_parts):
+            version2_parts.append(0)  
+        # Compare each part of the version
+        for part1, part2 in zip(version1_parts, version2_parts):
+            if part1 < part2:
+                return "image_version_file_2"
+            elif part1 > part2:
+                 return "image_version_file_1"
+            
+        # If versions are equal, compare the dates
+        date1 = int(app1_full_version.split("-")[1])
+        date2 = int(app2_full_version.split("-")[1])
+        if date1 < date2:
+            return "image_version_file_2"
+        elif date1 > date2:
+            return "image_version_file_1"
+        else:
+            # If dates are equal, compare the hours
+            hour1 = int(app1_full_version.split("-")[2])
+            hour2 = int(app2_full_version.split("-")[2])
+            if hour1 < hour2:
+                return "image_version_file_2"
+            if hour1 > hour2:
+                return "image_version_file_1"
+    except:
+        pass
+    return "unknown"
 
 USAGE_MSG = """USAGE: python criollitas.py <orchestrator_cfg_json_file1> <time_window_hours> <optional_orchestrator_cfg_json_file2>.
 WHERE:
