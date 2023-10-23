@@ -21,15 +21,16 @@
 ## Usage
 
 1- Requierement: Make sure you have Python3 installed on your system.
+
 2- Get the code:
 ```bash
 git clone https://github.com/ingaramop/criollitas-salvathon.git
 ```
-2- Step into the project directory:
+3- Step into the project directory:
 ```bash
 cd criollitas-salvathon
 ```
-3- Execute the script:
+4- Execute the script:
 ```bash
 python criollitas.py <orchestrator_cfg_json_file1> <time_window_hours> <optional_orchestrator_cfg_json_file2>
 ```
